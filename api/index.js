@@ -5,8 +5,10 @@ const path = require('path');
 const axios = require('axios');
 require('dotenv').config();
 const serverless = require('serverless-http');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -19,15 +21,29 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// ─── API RATE LIMITING (per IP) ────────────────────────────────────────────────
+const otpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes' },
+});
+
+const orderCreationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many order requests from this IP, please try again after 15 minutes' },
+});
+
 // ─── CACHED SERVERLESS CONNECTION ──────────────────────────────────────────────
 let isConnected = false;
 
 async function connectDB() {
+  if (!MONGO_URI) return;
   if (isConnected && mongoose.connection.readyState === 1) return;
-
-  if (!MONGO_URI) {
-    throw new Error('MONGO_URI environment variable is not set');
-  }
 
   try {
     await mongoose.connect(MONGO_URI, {
@@ -45,13 +61,14 @@ async function connectDB() {
   }
 }
 
-// ─── MIDDLEWARE: connect before every request ───────────────────────────────────
+// ─── MIDDLEWARE: connect when Mongo is configured ─────────────────────────────
 app.use(async (req, res, next) => {
+  if (!MONGO_URI) return next();
   try {
     await connectDB();
     next();
   } catch (err) {
-    res.status(500).json({ success: false, message: `Database connection failed: ${err.message}` });
+    res.status(503).json({ success: false, message: `Database connection failed: ${err.message}` });
   }
 });
 
@@ -104,31 +121,38 @@ const Order = mongoose.model('Order', orderSchema);
 const Otp = mongoose.model('Otp', otpSchema);
 const Product = mongoose.model('Product', productSchema);
 
+/** Used for GET /api/products and DB seed when Mongo is empty */
+const STATIC_CATALOG = [
+  { type: 'standard', id_ref: 1, name: "Velvet Dream Cake", category: "cakes", price: 850, emoji: "🎂", img: "https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860" },
+  { type: 'standard', id_ref: 2, name: "Dutch Truffle Delight", category: "cakes", price: 950, emoji: "🍰", img: "https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619" },
+  { type: 'standard', id_ref: 3, name: "Pineapple Fresh Cream", category: "cakes", price: 675, emoji: "🍍", img: "https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785" },
+  { type: 'standard', id_ref: 4, name: "Overload Brownie", category: "brownies", price: 120, emoji: "🍫", img: "https://theobroma.in/cdn/shop/files/OverloadBrownie_400x400.jpg?v=1711183338" },
+  { type: 'standard', id_ref: 5, name: "Walnut Fudge", category: "brownies", price: 95, emoji: "🥜", img: "https://theobroma.in/cdn/shop/files/WalnutBrownie_400x400.jpg?v=1711183181" },
+  { type: 'standard', id_ref: 6, name: "Classic Choco", category: "brownies", price: 80, emoji: "🍫", img: "https://theobroma.in/cdn/shop/files/eggless-theo-overload-brownie-6.jpg?v=1681320427" },
+  { type: 'standard', id_ref: 7, name: "Chocolate Mousse", category: "desserts", price: 150, emoji: "🍮", img: "https://theobroma.in/cdn/shop/files/Delicacies-04.jpg?v=1681320427" },
+  { type: 'standard', id_ref: 8, name: "Tiramisu Jar", category: "desserts", price: 180, emoji: "☕", img: "https://theobroma.in/cdn/shop/files/TiramisuPastry_400x400.jpg?v=1711125219" },
+  { type: 'standard', id_ref: 9, name: "Choco Chip Cookies", category: "cookies", price: 250, emoji: "🍪", img: "https://theobroma.in/cdn/shop/files/Cookie-04_400x400.jpg?v=1701416744" },
+  { type: 'standard', id_ref: 10, name: "Almond Biscotti", category: "cookies", price: 300, emoji: "🥖", img: "https://theobroma.in/cdn/shop/files/Cookie-01_400x400.jpg?v=1681320427" },
+  { type: 'birthday', id_ref: 'Red Velvet', name: "Red Velvet", price: 850, emoji: "🎂", img: 'https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860' },
+  { type: 'birthday', id_ref: 'Dutch Truffle', name: "Dutch Truffle", price: 950, emoji: "🍰", img: 'https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619' },
+  { type: 'birthday', id_ref: 'Pineapple', name: "Pineapple", price: 675, emoji: "🍍", img: 'https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785' },
+  { type: 'birthday', id_ref: 'Chocoholic', name: "Chocoholic", price: 900, emoji: "🍫", img: 'https://theobroma.in/cdn/shop/files/ChocoholicPastry_400x400.jpg?v=1711096267' },
+  { type: 'birthday', id_ref: 'Black Forest', name: "Black Forest", price: 750, emoji: "🌲", img: 'https://theobroma.in/cdn/shop/files/BlackForestCakehalfkg_Square_400x400.jpg?v=1711124458' },
+  { type: 'birthday', id_ref: 'Cheesecake', name: "Cheesecake", price: 1200, emoji: "🧀", img: 'https://theobroma.in/cdn/shop/files/BlueberryCheesecakeCup_400x400.jpg?v=1711514632' }
+];
+
+/** In-memory orders when MongoDB is not configured or not connected */
+const memoryOrders = [];
+
+function isDbReady() {
+  return Boolean(MONGO_URI) && mongoose.connection.readyState === 1;
+}
+
 // ─── INIT PRODUCTS ─────────────────────────────────────────────────────────────
 async function seedProducts() {
   const count = await Product.countDocuments();
   if (count === 0) {
-    const initialProducts = [
-      // Standard Products
-      { type: 'standard', id_ref: 1, name: "Velvet Dream Cake", category: "cakes", price: 850, emoji: "🎂", img: "https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860" },
-      { type: 'standard', id_ref: 2, name: "Dutch Truffle Delight", category: "cakes", price: 950, emoji: "🍰", img: "https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619" },
-      { type: 'standard', id_ref: 3, name: "Pineapple Fresh Cream", category: "cakes", price: 675, emoji: "🍍", img: "https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785" },
-      { type: 'standard', id_ref: 4, name: "Overload Brownie", category: "brownies", price: 120, emoji: "🍫", img: "https://theobroma.in/cdn/shop/files/OverloadBrownie_400x400.jpg?v=1711183338" },
-      { type: 'standard', id_ref: 5, name: "Walnut Fudge", category: "brownies", price: 95, emoji: "🥜", img: "https://theobroma.in/cdn/shop/files/WalnutBrownie_400x400.jpg?v=1711183181" },
-      { type: 'standard', id_ref: 6, name: "Classic Choco", category: "brownies", price: 80, emoji: "🍫", img: "https://theobroma.in/cdn/shop/files/eggless-theo-overload-brownie-6.jpg?v=1681320427" },
-      { type: 'standard', id_ref: 7, name: "Chocolate Mousse", category: "desserts", price: 150, emoji: "🍮", img: "https://theobroma.in/cdn/shop/files/Delicacies-04.jpg?v=1681320427" },
-      { type: 'standard', id_ref: 8, name: "Tiramisu Jar", category: "desserts", price: 180, emoji: "☕", img: "https://theobroma.in/cdn/shop/files/TiramisuPastry_400x400.jpg?v=1711125219" },
-      { type: 'standard', id_ref: 9, name: "Choco Chip Cookies", category: "cookies", price: 250, emoji: "🍪", img: "https://theobroma.in/cdn/shop/files/Cookie-04_400x400.jpg?v=1701416744" },
-      { type: 'standard', id_ref: 10, name: "Almond Biscotti", category: "cookies", price: 300, emoji: "🥖", img: "https://theobroma.in/cdn/shop/files/Cookie-01_400x400.jpg?v=1681320427" },
-      // Birthday Cakes (base price per kg)
-      { type: 'birthday', id_ref: 'Red Velvet', name: "Red Velvet", price: 850, emoji: "🎂", img: 'https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860' },
-      { type: 'birthday', id_ref: 'Dutch Truffle', name: "Dutch Truffle", price: 950, emoji: "🍰", img: 'https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619' },
-      { type: 'birthday', id_ref: 'Pineapple', name: "Pineapple", price: 675, emoji: "🍍", img: 'https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785' },
-      { type: 'birthday', id_ref: 'Chocoholic', name: "Chocoholic", price: 900, emoji: "🍫", img: 'https://theobroma.in/cdn/shop/files/ChocoholicPastry_400x400.jpg?v=1711096267' },
-      { type: 'birthday', id_ref: 'Black Forest', name: "Black Forest", price: 750, emoji: "🌲", img: 'https://theobroma.in/cdn/shop/files/BlackForestCakehalfkg_Square_400x400.jpg?v=1711124458' },
-      { type: 'birthday', id_ref: 'Cheesecake', name: "Cheesecake", price: 1200, emoji: "🧀", img: 'https://theobroma.in/cdn/shop/files/BlueberryCheesecakeCup_400x400.jpg?v=1711514632' }
-    ];
-    await Product.insertMany(initialProducts);
+    await Product.insertMany(STATIC_CATALOG);
     console.log('🌱 Seeded initial products to database');
   }
 }
@@ -147,8 +171,9 @@ function generateOTP() {
 }
 
 // ─── OTP ROUTES ────────────────────────────────────────────────────────────────
+
 // Send OTP  (demo — shows OTP in response; in production wire up MSG91 / Twilio)
-app.post('/api/send-otp', async (req, res) => {
+app.post('/api/send-otp', otpRateLimiter, async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone || phone.length < 10) {
@@ -226,6 +251,9 @@ app.post('/api/verify-otp', async (req, res) => {
 // Get all products
 app.get('/api/products', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      return res.json({ success: true, products: STATIC_CATALOG });
+    }
     const products = await Product.find().lean();
     res.json({ success: true, products });
   } catch (err) {
@@ -237,6 +265,9 @@ app.get('/api/products', async (req, res) => {
 // Add new product
 app.post('/api/products', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      return res.status(503).json({ success: false, message: 'Product admin requires MongoDB (set MONGO_URI).' });
+    }
     const { type, name, category, price, emoji, img } = req.body;
 
     if (!type || !name || price === undefined) {
@@ -271,6 +302,9 @@ app.post('/api/products', async (req, res) => {
 // Update product details
 app.patch('/api/products/:id', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      return res.status(503).json({ success: false, message: 'Product admin requires MongoDB (set MONGO_URI).' });
+    }
     const { price, name, img } = req.body;
 
     // Build update object dynamically
@@ -309,6 +343,9 @@ app.patch('/api/products/:id', async (req, res) => {
 // Delete product
 app.delete('/api/products/:id', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      return res.status(503).json({ success: false, message: 'Product admin requires MongoDB (set MONGO_URI).' });
+    }
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
@@ -321,32 +358,87 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // ─── ORDER ROUTES ──────────────────────────────────────────────────────────────
+
 // Create order
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', orderCreationRateLimiter, async (req, res) => {
   try {
     const { customer_name, phone, address, city, pincode, items, total } = req.body;
 
-    if (!customer_name || !phone || !address || !items || !total) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    if (!customer_name || !phone || !address || !city || !pincode) {
+      return res.status(400).json({ success: false, message: 'Missing delivery or contact details' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Your cart has no items' });
+    }
+
+    const sanitizedItems = items.map((row, idx) => {
+      const price = Number(row.price);
+      const qtyRaw = parseInt(String(row.qty), 10);
+      const qty = Number.isFinite(qtyRaw) ? Math.max(1, Math.min(999, qtyRaw)) : 1;
+      return {
+        id: typeof row.id === 'number' && Number.isFinite(row.id) ? row.id : 0,
+        name: String(row.name || `Item ${idx + 1}`).slice(0, 200),
+        price,
+        qty,
+        emoji: (row.emoji != null && String(row.emoji).trim()) ? String(row.emoji).trim().slice(0, 12) : '🍫',
+        category: (row.category != null && String(row.category).trim()) ? String(row.category).trim().slice(0, 80) : 'general',
+      };
+    });
+
+    for (const row of sanitizedItems) {
+      if (!Number.isFinite(row.price) || row.price < 0 || row.price > 1e8) {
+        return res.status(400).json({ success: false, message: 'Invalid item price in order' });
+      }
+    }
+
+    const computedTotal = sanitizedItems.reduce((s, i) => s + i.price * i.qty, 0);
+    const clientTotal = Number(total);
+    const finalTotal = Number.isFinite(clientTotal) && Math.abs(clientTotal - computedTotal) <= 2
+      ? Math.round(clientTotal * 100) / 100
+      : Math.round(computedTotal * 100) / 100;
+
+    const phoneDigits = String(phone).replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      return res.status(400).json({ success: false, message: 'Invalid phone number' });
     }
 
     const order_id = generateOrderId();
 
-    const order = await Order.create({
+    const orderDoc = {
       order_id,
-      customer_name,
-      phone,
-      address,
-      city,
-      pincode,
-      items,
-      total,
-    });
+      customer_name: String(customer_name).trim().slice(0, 120),
+      phone: phoneDigits.slice(0, 15),
+      address: String(address).trim().slice(0, 500),
+      city: String(city).trim().slice(0, 80),
+      pincode: String(pincode).trim().slice(0, 12),
+      items: sanitizedItems,
+      total: finalTotal,
+    };
+
+    if (!isDbReady()) {
+      const now = new Date();
+      memoryOrders.unshift({
+        ...orderDoc,
+        status: 'pending',
+        payment_status: 'unpaid',
+        notes: '',
+        confirmed_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      return res.json({
+        success: true,
+        order_id,
+        message: 'Order placed successfully (memory mode — add MONGO_URI to persist orders in MongoDB).',
+      });
+    }
+
+    const order = await Order.create(orderDoc);
 
     res.json({ success: true, order_id: order.order_id, message: 'Order placed successfully' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message || 'Server error' });
   }
 });
 
@@ -354,8 +446,16 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = {};
 
+    if (!isDbReady()) {
+      let list = [...memoryOrders];
+      if (status && status !== 'all') {
+        list = list.filter((o) => o.status === status || o.payment_status === status);
+      }
+      return res.json({ success: true, orders: list });
+    }
+
+    const filter = {};
     if (status && status !== 'all') {
       filter.$or = [{ status }, { payment_status: status }];
     }
@@ -371,6 +471,11 @@ app.get('/api/orders', async (req, res) => {
 // Get single order
 app.get('/api/orders/:orderId', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      const order = memoryOrders.find((o) => o.order_id === req.params.orderId);
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+      return res.json({ success: true, order });
+    }
     const order = await Order.findOne({ order_id: req.params.orderId }).lean();
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     res.json({ success: true, order });
@@ -383,6 +488,18 @@ app.get('/api/orders/:orderId', async (req, res) => {
 app.patch('/api/orders/:orderId/confirm-payment', async (req, res) => {
   try {
     const { notes } = req.body;
+
+    if (!isDbReady()) {
+      const order = memoryOrders.find((o) => o.order_id === req.params.orderId);
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+      order.payment_status = 'paid';
+      order.status = 'confirmed';
+      order.confirmed_at = new Date();
+      order.notes = notes || 'Payment confirmed via WhatsApp';
+      order.updated_at = new Date();
+      return res.json({ success: true, message: 'Payment confirmed' });
+    }
+
     const order = await Order.findOneAndUpdate(
       { order_id: req.params.orderId },
       {
@@ -404,6 +521,15 @@ app.patch('/api/orders/:orderId/confirm-payment', async (req, res) => {
 app.patch('/api/orders/:orderId/status', async (req, res) => {
   try {
     const { status } = req.body;
+
+    if (!isDbReady()) {
+      const order = memoryOrders.find((o) => o.order_id === req.params.orderId);
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+      order.status = status;
+      order.updated_at = new Date();
+      return res.json({ success: true });
+    }
+
     const order = await Order.findOneAndUpdate(
       { order_id: req.params.orderId },
       { status },
@@ -419,6 +545,24 @@ app.patch('/api/orders/:orderId/status', async (req, res) => {
 // Stats for admin dashboard
 app.get('/api/stats', async (req, res) => {
   try {
+    if (!isDbReady()) {
+      const total_orders = memoryOrders.length;
+      const pending_orders = memoryOrders.filter((o) => o.status === 'pending').length;
+      const paid_orders = memoryOrders.filter((o) => o.payment_status === 'paid').length;
+      const total_revenue = memoryOrders
+        .filter((o) => o.payment_status === 'paid')
+        .reduce((s, o) => s + (Number(o.total) || 0), 0);
+      return res.json({
+        success: true,
+        stats: {
+          total_orders,
+          pending_orders,
+          paid_orders,
+          total_revenue,
+        },
+      });
+    }
+
     const [totalOrders, pendingOrders, paidOrders, revenueResult] = await Promise.all([
       Order.countDocuments(),
       Order.countDocuments({ status: 'pending' }),
@@ -451,6 +595,9 @@ app.get('/', (req, res) => {
 
 // ─── START ─────────────────────────────────────────────────────────────────────
 if (require.main === module) {
+  if (!MONGO_URI) {
+    console.warn('⚠️  MONGO_URI is not set. Orders and products API run in memory/static mode until you restart the server.');
+  }
   app.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
   });

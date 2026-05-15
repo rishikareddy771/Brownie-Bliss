@@ -1,43 +1,79 @@
 // --- CONFIG ---
-// API_BASE is defined in cart.js
+const API_BASE = '/api';
+
+// Same catalog as api/index.js seed — used when /api/products is unavailable (no DB, offline, file://).
+const FALLBACK_DB_PRODUCTS = [
+    { type: 'standard', id_ref: 1, name: 'Velvet Dream Cake', category: 'cakes', price: 850, emoji: '🎂', img: 'https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860' },
+    { type: 'standard', id_ref: 2, name: 'Dutch Truffle Delight', category: 'cakes', price: 950, emoji: '🍰', img: 'https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619' },
+    { type: 'standard', id_ref: 3, name: 'Pineapple Fresh Cream', category: 'cakes', price: 675, emoji: '🍍', img: 'https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785' },
+    { type: 'standard', id_ref: 4, name: 'Overload Brownie', category: 'brownies', price: 120, emoji: '🍫', img: 'https://theobroma.in/cdn/shop/files/OverloadBrownie_400x400.jpg?v=1711183338' },
+    { type: 'standard', id_ref: 5, name: 'Walnut Fudge', category: 'brownies', price: 95, emoji: '🥜', img: 'https://theobroma.in/cdn/shop/files/WalnutBrownie_400x400.jpg?v=1711183181' },
+    { type: 'standard', id_ref: 6, name: 'Classic Choco', category: 'brownies', price: 80, emoji: '🍫', img: 'https://theobroma.in/cdn/shop/files/eggless-theo-overload-brownie-6.jpg?v=1681320427' },
+    { type: 'standard', id_ref: 7, name: 'Chocolate Mousse', category: 'desserts', price: 150, emoji: '🍮', img: 'https://theobroma.in/cdn/shop/files/Delicacies-04.jpg?v=1681320427' },
+    { type: 'standard', id_ref: 8, name: 'Tiramisu Jar', category: 'desserts', price: 180, emoji: '☕', img: 'https://theobroma.in/cdn/shop/files/TiramisuPastry_400x400.jpg?v=1711125219' },
+    { type: 'standard', id_ref: 9, name: 'Choco Chip Cookies', category: 'cookies', price: 250, emoji: '🍪', img: 'https://theobroma.in/cdn/shop/files/Cookie-04_400x400.jpg?v=1701416744' },
+    { type: 'standard', id_ref: 10, name: 'Almond Biscotti', category: 'cookies', price: 300, emoji: '🥖', img: 'https://theobroma.in/cdn/shop/files/Cookie-01_400x400.jpg?v=1681320427' },
+    { type: 'birthday', id_ref: 'Red Velvet', name: 'Red Velvet', price: 850, emoji: '🎂', img: 'https://theobroma.in/cdn/shop/files/redvelvet-theo.jpg?v=1701321860' },
+    { type: 'birthday', id_ref: 'Dutch Truffle', name: 'Dutch Truffle', price: 950, emoji: '🍰', img: 'https://theobroma.in/cdn/shop/files/DutchTruffleCakehalfkg_Square_400x400.jpg?v=1711124619' },
+    { type: 'birthday', id_ref: 'Pineapple', name: 'Pineapple', price: 675, emoji: '🍍', img: 'https://theobroma.in/cdn/shop/files/FreshCreamPineappleCakehalfkg_5e299618-cc46-4daf-953d-65616ca0299f_400x400.jpg?v=1711124785' },
+    { type: 'birthday', id_ref: 'Chocoholic', name: 'Chocoholic', price: 900, emoji: '🍫', img: 'https://theobroma.in/cdn/shop/files/ChocoholicPastry_400x400.jpg?v=1711096267' },
+    { type: 'birthday', id_ref: 'Black Forest', name: 'Black Forest', price: 750, emoji: '🌲', img: 'https://theobroma.in/cdn/shop/files/BlackForestCakehalfkg_Square_400x400.jpg?v=1711124458' },
+    { type: 'birthday', id_ref: 'Cheesecake', name: 'Cheesecake', price: 1200, emoji: '🧀', img: 'https://theobroma.in/cdn/shop/files/BlueberryCheesecakeCup_400x400.jpg?v=1711514632' }
+];
+
+function buildCatalogFromList(list) {
+    const source = (Array.isArray(list) && list.length > 0) ? list : FALLBACK_DB_PRODUCTS;
+    const standards = source.filter(p => p.type === 'standard');
+    const mapped = standards.map(p => ({
+        id: p.id_ref,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        emoji: p.emoji,
+        img: p.img
+    }));
+    products = mapped.length > 0 ? mapped : FALLBACK_DB_PRODUCTS.filter(p => p.type === 'standard').map(p => ({
+        id: p.id_ref,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        emoji: p.emoji,
+        img: p.img
+    }));
+
+    const birthdaysFromApi = source.filter(p => p.type === 'birthday');
+    bdayCakes = {};
+    FALLBACK_DB_PRODUCTS.filter(p => p.type === 'birthday').forEach(p => {
+        bdayCakes[p.id_ref] = { price: p.price, emoji: p.emoji, img: p.img };
+    });
+    birthdaysFromApi.forEach(p => {
+        bdayCakes[p.id_ref] = { price: p.price, emoji: p.emoji, img: p.img };
+    });
+}
 
 // --- PRODUCTS DATA ---
 let products = [];
 let bdayCakes = {};
+buildCatalogFromList(null);
 
 async function loadProducts() {
     try {
         const res = await fetch(`${API_BASE}/products`);
         const data = await res.json();
-        if (data.success) {
-            products = data.products.filter(p => p.type === 'standard').map(p => ({
-                id: p.id_ref,
-                name: p.name,
-                category: p.category,
-                price: p.price,
-                emoji: p.emoji,
-                img: p.img
-            }));
-
-            const bd = data.products.filter(p => p.type === 'birthday');
-            bd.forEach(p => {
-                bdayCakes[p.id_ref] = {
-                    price: p.price,
-                    emoji: p.emoji,
-                    img: p.img
-                };
-            });
-
-            // Re-render UI now that data is loaded
-            if (document.getElementById('productsGrid')) {
-                filterProducts('all');
-            }
-            if (document.getElementById('cakePrice')) {
-                calculateBdayPrice();
-            }
+        if (data.success && Array.isArray(data.products)) {
+            buildCatalogFromList(data.products);
+        } else {
+            buildCatalogFromList(null);
         }
     } catch (e) {
         console.error('Error loading products from database:', e);
+        buildCatalogFromList(null);
+    }
+    if (document.getElementById('productsGrid')) {
+        filterProducts('all');
+    }
+    if (document.getElementById('cakePrice')) {
+        calculateBdayPrice();
     }
 }
 
@@ -99,6 +135,7 @@ function addToCart(product) {
     saveCart();
     updateCartUI();
     showToast('Added to cart! 🛒');
+    openCart();
 }
 
 function changeQty(index, delta) {
@@ -344,6 +381,7 @@ function goToConfirm() {
 }
 
 async function placeOrder() {
+    const lineTotal = cart.reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
     const orderData = {
         customer_name: checkoutState.name,
         phone: checkoutState.phone,
@@ -351,15 +389,22 @@ async function placeOrder() {
         city: checkoutState.city,
         pincode: checkoutState.pincode,
         items: cart.map(i => ({
-            id: typeof i.id === 'number' ? i.id : 0,
+            id: typeof i.id === 'number' && Number.isFinite(i.id) ? i.id : 0,
             name: i.name,
-            price: i.price,
-            qty: i.qty,
+            price: Number(i.price),
+            qty: Math.max(1, Math.floor(Number(i.qty)) || 1),
             emoji: i.emoji || '🍫',
             category: i.category || 'general'
         })),
-        total: cart.reduce((s, i) => s + i.price * i.qty, 0)
+        total: Math.round(lineTotal * 100) / 100
     };
+
+    const waSnapshot = cart.map(i => ({
+        name: i.name,
+        price: Number(i.price),
+        qty: Math.max(1, Math.floor(Number(i.qty)) || 1)
+    }));
+    const waTotal = orderData.total;
 
     try {
         const res = await fetch(`${API_BASE}/orders`, {
@@ -367,28 +412,46 @@ async function placeOrder() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
-        const data = await res.json();
+
+        let data;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            showToast(text ? text.slice(0, 160) : `Order failed (${res.status})`);
+            return;
+        }
+
         if (data.success) {
             const orderId = data.order_id;
-            sendWhatsAppFinal(orderId);
+            sendWhatsAppFinal(orderId, waSnapshot, waTotal);
 
             cart = [];
             saveCart();
             updateCartUI();
             closeCheckout();
-            showToast('🎉 Order placed successfully!');
+            const okMsg = data.message && String(data.message).includes('memory mode')
+                ? '🎉 Order placed! (Demo: orders reset when the server restarts — set MONGO_URI to save in the database.)'
+                : '🎉 Order placed successfully!';
+            showToast(okMsg);
         } else {
-            showToast('Failed to save order. Please try again.');
+            const errText = (data && (data.message || data.error)) ? String(data.message || data.error) : '';
+            showToast(errText || `Could not save order (HTTP ${res.status}). Try again or check the server.`);
         }
     } catch (e) {
+        console.error(e);
         showToast('Error placing order. Please try again.');
     }
 }
 
 // --- WHATSAPP FINAL ---
-function sendWhatsAppFinal(orderId) {
-    const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-    const itemLines = cart.map(i => `• ${i.name} × ${i.qty} = ₹${(i.price * i.qty).toLocaleString()}`).join('\n');
+function sendWhatsAppFinal(orderId, itemsSnap, orderTotal) {
+    const lines = Array.isArray(itemsSnap) && itemsSnap.length ? itemsSnap : cart;
+    const total = typeof orderTotal === 'number' && Number.isFinite(orderTotal)
+        ? orderTotal
+        : lines.reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
+    const itemLines = lines.map(i => `• ${i.name} × ${i.qty} = ₹${(Number(i.price) * Number(i.qty)).toLocaleString('en-IN')}`).join('\n');
 
     const message = `🍫 *New Order Received — Brownie Bliss*\n\n` +
         `📋 *Order ID:* ${orderId}\n` +
@@ -396,7 +459,7 @@ function sendWhatsAppFinal(orderId) {
         `📱 *Phone:* +91 ${checkoutState.phone}\n` +
         `📍 *Address:* ${checkoutState.address}, ${checkoutState.city} - ${checkoutState.pincode}\n\n` +
         `🛒 *Order Details:*\n${itemLines}\n\n` +
-        `💰 *Total Amount: ₹${total.toLocaleString()}*\n\n` +
+        `💰 *Total Amount: ₹${total.toLocaleString('en-IN')}*\n\n` +
         `_Your order has been recorded. Please share the payment receipt for confirmation!_ ✨`;
 
     const encodedMsg = encodeURIComponent(message);
@@ -433,7 +496,7 @@ function filterProducts(category, btn) {
                 <div class="product-category">${p.category}</div>
                 <div class="product-name">${p.name}</div>
                 <div class="product-price">₹${p.price}</div>
-                <button class="add-to-cart" onclick='addToCart(${JSON.stringify(p)})'>
+                <button type="button" class="add-to-cart" data-product-id="${String(p.id)}">
                     Add to Cart
                 </button>
             </div>
@@ -449,7 +512,7 @@ let selectedWeight = '1.0';
 function updateBirthdayCake(flavor) {
     selectedFlavor = flavor;
     const cakeImg = document.getElementById('birthdayCakeImg');
-    if (cakeImg) cakeImg.src = bdayCakes[flavor].img;
+    if (cakeImg && bdayCakes[flavor]) cakeImg.src = bdayCakes[flavor].img;
 
     if (event && event.target) {
         event.target.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
@@ -475,7 +538,7 @@ function calculateBdayPrice() {
 }
 
 function addBirthdayToCart() {
-    if (!bdayCakes[selectedFlavor]) return; // Wait until loaded
+    if (!bdayCakes[selectedFlavor]) return;
     const finalPrice = bdayCakes[selectedFlavor].price * parseFloat(selectedWeight);
     const msgInput = document.getElementById('cakeMessage');
     const message = msgInput ? msgInput.value.trim() : '';
@@ -492,7 +555,6 @@ function addBirthdayToCart() {
     };
     addToCart(item);
     if (msgInput) msgInput.value = '';
-    openCart();
 }
 
 // --- UTILITIES ---
@@ -507,5 +569,22 @@ function showToast(msg) {
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
     updateCartUI();
+    if (document.getElementById('productsGrid')) {
+        filterProducts('all');
+    }
+    if (document.getElementById('cakePrice')) {
+        calculateBdayPrice();
+    }
+    const productsGrid = document.getElementById('productsGrid');
+    if (productsGrid) {
+        productsGrid.addEventListener('click', (e) => {
+            const btn = e.target.closest('.add-to-cart');
+            if (!btn || !productsGrid.contains(btn)) return;
+            const rawId = btn.getAttribute('data-product-id');
+            if (rawId == null || rawId === '') return;
+            const product = products.find((pr) => String(pr.id) === String(rawId));
+            if (product) addToCart({ ...product });
+        });
+    }
     loadProducts(); // Load and then automatically re-render main grid/birthday block
 });
