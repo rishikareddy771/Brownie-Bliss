@@ -17,7 +17,8 @@ async function loadProducts() {
                 category: p.category,
                 price: p.price,
                 emoji: p.emoji,
-                img: p.img
+                img: p.img,
+                description: p.description || ''
             }));
 
             const bd = data.products.filter(p => p.type === 'birthday');
@@ -454,6 +455,7 @@ function filterProducts(category, btn) {
             <div class="product-info">
                 <div class="product-category">${p.category}</div>
                 <div class="product-name">${p.name}</div>
+                ${p.description ? `<div class="product-desc">${p.description}</div>` : ''}
                 <div class="product-price">₹${p.price}</div>
                 <button class="add-to-cart" onclick='addToCart(${JSON.stringify(p)})'>
                     Add to Cart
