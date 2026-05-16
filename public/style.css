@@ -6541,3 +6541,159 @@ html.dark .cart-custom-msg {
   background: rgba(240, 228, 208, 0.08);
   color: var(--text-mid);
 }
+
+/* ── FIX 1: Cart +/- buttons visible in dark mode ── */
+html.dark .qty-btn {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: transparent;
+}
+
+html.dark .qty-btn:hover {
+  background: var(--gold);
+  color: var(--brown-dark);
+  border-color: var(--gold);
+}
+
+html.dark .qty-num {
+  color: var(--text-dark);
+}
+
+html.dark .cart-item-remove {
+  color: var(--text-mid);
+}
+
+html.dark .cart-item-remove:hover {
+  color: #fca5a5;
+}
+
+/* ── FIX 2: Checkout / OTP modal dark mode ── */
+html.dark .checkout-modal {
+  background: var(--cream);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+}
+
+html.dark .checkout-head {
+  background: var(--cream-dark);
+  border-bottom-color: #3a2010;
+}
+
+html.dark .checkout-close {
+  color: var(--text-dark);
+}
+
+html.dark .checkout-title {
+  color: var(--text-dark);
+}
+
+html.dark .checkout-subtitle {
+  color: var(--text-mid);
+}
+
+html.dark .step-indicator {
+  background: #3a2010;
+  color: var(--text-mid);
+}
+
+html.dark .step-indicator.active {
+  background: var(--gold);
+  color: var(--brown-dark);
+}
+
+html.dark .step-indicator.done {
+  background: var(--gold);
+  color: var(--brown-dark);
+}
+
+html.dark .step-line {
+  background: #3a2010;
+}
+
+html.dark .form-group label {
+  color: var(--gold);
+}
+
+html.dark .form-group input,
+html.dark .form-group textarea {
+  background: var(--cream-dark);
+  color: var(--text-dark);
+  border-color: #3a2010;
+}
+
+html.dark .form-group input:focus,
+html.dark .form-group textarea:focus {
+  border-color: var(--gold);
+}
+
+html.dark .form-group input::placeholder,
+html.dark .form-group textarea::placeholder {
+  color: #8a6848;
+}
+
+html.dark .phone-input-group {
+  border-color: #3a2010;
+}
+
+html.dark .phone-input-group .prefix {
+  background: #3a2010;
+  color: var(--gold);
+}
+
+html.dark .otp-box {
+  background: var(--cream-dark);
+  color: var(--text-dark);
+  border-color: #3a2010;
+}
+
+html.dark .otp-box:focus {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.06);
+}
+
+html.dark .confirm-summary {
+  background: var(--cream-dark);
+}
+
+html.dark .confirm-row {
+  color: var(--text-dark);
+}
+
+html.dark .confirm-row strong {
+  color: var(--gold);
+}
+
+html.dark .confirm-total {
+  border-top-color: #3a2010;
+  color: var(--text-dark);
+}
+
+html.dark .confirm-total strong {
+  color: var(--gold);
+}
+
+html.dark .text-link {
+  color: var(--gold);
+}
+
+/* ── FIX 3: Toast always on top, never blurred ── */
+.toast {
+  z-index: 99999 !important;
+}
+
+/* ── FIX 4: Customization modal dark mode polish ── */
+html.dark .customize-close {
+  color: var(--text-dark);
+}
+
+html.dark .customize-base-price {
+  color: var(--text-mid);
+}
+
+html.dark .customize-option input[type="radio"],
+html.dark .customize-option input[type="checkbox"] {
+  accent-color: var(--gold);
+}
+
+html.dark .topping-price {
+  color: var(--gold);
+}
