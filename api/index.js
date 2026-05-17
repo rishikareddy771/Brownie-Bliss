@@ -700,7 +700,26 @@ if (require.main === module) {
   }
   app.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
+function startServer(port) {
+  const server = app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
   });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && !process.env.PORT) {
+      const nextPort = Number(port) + 1;
+      console.warn(`Port ${port} is already in use. Trying ${nextPort}...`);
+      startServer(nextPort);
+      return;
+    }
+
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+if (require.main === module) {
+  startServer(Number(PORT));
 }
 
 module.exports = serverless(app);
